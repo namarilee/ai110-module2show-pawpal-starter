@@ -14,7 +14,7 @@ class CareTask:
         """Return a readable string like 'Morning walk (20 min, high)'."""
         pass
 
-
+ 
 class Pet:
     """Stores a pet's profile and its list of care tasks."""
 
