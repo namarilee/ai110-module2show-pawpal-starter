@@ -2,7 +2,17 @@
 
 ## 1. System Design
 
-**a. Core user actions**
+**a. Initial design**
+
+The initial design uses three classes: `CareTask`, `Pet`, and `DailyScheduler`.
+
+**`CareTask`** represents one unit of care (a walk, feeding, medication, etc.). Its responsibility is to hold the task's data — title, duration in minutes, and priority — and to expose a `priority_rank()` method that converts the string priority into a number (high=3, medium=2, low=1) so the scheduler can sort tasks without comparing strings directly.
+
+**`Pet`** is the central data container. It stores the pet's profile (name, species, age, health notes) and owns the list of `CareTask` objects. Its responsibility is to manage that list: adding, removing, and reporting total task time. It acts as the single source of truth that the scheduler reads from.
+
+**`DailyScheduler`** is the core logic class. It takes a `Pet` and a time budget (in minutes) and produces a prioritized daily plan. Its `build()` method sorts tasks by priority rank, then greedily fits them into the available time, recording a start time and a one-line reason for each accepted task. Supporting methods — `format_schedule()` and `skipped_tasks()` — handle display and surfacing what was left out.
+
+**b. Core user actions**
 
 The three core actions a user should be able to perform in PawPal+ are:
 
@@ -12,15 +22,17 @@ The three core actions a user should be able to perform in PawPal+ are:
 
 3. **Generate and view today's daily plan** — The user triggers the scheduler to produce a prioritized daily schedule based on the tasks they've entered and any time or preference constraints. The app displays the plan clearly and ideally explains why tasks were ordered or included the way they were.
 
-**b. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Three changes were made while reviewing the skeleton code:
+
+1. **Added `start_hour` to `DailyScheduler`** — The original design had no way to produce real clock times (e.g., "9:00 AM", "9:20 AM") for each scheduled task. Without a starting point, `build()` could only produce meaningless offsets. Adding `start_hour: int = 9` as an `__init__` parameter (defaulting to 9 AM) gives the scheduler what it needs to compute and display human-readable start times.
+
+2. **Added input validation to `CareTask.__init__`** — The original skeleton accepted any string for `priority`, which would cause `priority_rank()` to fail silently or return the wrong value if given `"High"` or a typo. A `VALID_PRIORITIES` class constant and two guard clauses (`ValueError` on bad priority or non-positive duration) catch bad data at construction time rather than during scheduling.
+
+3. **Added ordering warnings to `format_schedule()` and `skipped_tasks()`** — Both methods depend on `self.schedule` being populated by `build()` first. If called out of order they return empty results with no indication of the problem. Brief docstring notes make this dependency explicit so it's harder to misuse.
 
 ---
 
