@@ -99,7 +99,7 @@ pip install -r requirements.txt
 ```
 
 ## 📸 Demo
-<a href="/course_images/ai110/app_screenshot.png" target="_blank"><img src='/course_images/ai110/app_screenshot.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+<a href="/app_screenshot.png" target="_blank"><img src='/app_screenshot.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
 ### Suggested workflow
 
