@@ -22,6 +22,24 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+Beyond the basic daily plan, PawPal+ includes several logic improvements that make the scheduler more useful for real pet care routines.
+
+**Recurring tasks**
+Tasks carry a `frequency` (`daily`, `weekly`, or `as_needed`) and a `next_due` date. Calling `mark_complete()` on a daily task automatically advances `next_due` to tomorrow; a weekly task advances it by 7 days. `as_needed` tasks stay completed until the owner re-adds them. `is_due_today()` lets the scheduler skip tasks that aren't due yet, so a weekly grooming session only appears on the right day.
+
+**Filtering and sorting**
+`Scheduler.filter_tasks()` accepts any combination of `pet_name`, `status` (`pending`/`completed`), `frequency`, and `priority` to narrow down the task list. `Scheduler.sort_tasks()` reorders any task list by `priority`, `duration`, `frequency`, or `status`. Both methods work on the live task list independently of the built schedule.
+
+**Conflict detection**
+`Scheduler.detect_conflicts()` checks every pair of scheduled entries for overlapping time windows using the standard interval overlap test (`A.start < B.end and B.start < A.end`). It returns plain-English warning strings — one per conflict — rather than crashing. It distinguishes between same-pet conflicts (one owner can't do two things for the same pet at once) and cross-pet conflicts (can't walk one pet while medicating another).
+
+**Greedy scheduling with priority**
+The core `build()` algorithm sorts tasks by priority rank (high → medium → low), breaks ties by shortest duration, then greedily fits tasks into the available time budget. Tasks that don't fit are surfaced by `skipped_tasks()`. This approach is O(n log n), easy to predict, and respects the urgency the owner has assigned — see `reflection.md` Section 2b for the full tradeoff discussion.
+
+---
+
 ## Getting started
 
 ### Setup

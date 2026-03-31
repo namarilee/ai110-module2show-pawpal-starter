@@ -45,8 +45,11 @@ Three changes were made while reviewing the skeleton code:
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+The scheduler uses a **greedy algorithm**: it sorts all pending tasks by priority (high → medium → low), then walks the list from top to bottom and assigns each task to the next available time slot as long as it fits within the remaining time budget. Once a task is placed, the clock advances by its duration and the next task starts immediately after.
+
+The tradeoff is **speed and simplicity vs. optimality**. A greedy approach is easy to read, runs in O(n log n) time (dominated by the sort), and always produces a valid schedule. However, it can miss better arrangements. For example, if the budget has 30 minutes left and the next task takes 35 minutes (skipped), but two lower-priority tasks of 10 and 15 minutes would fit together, the greedy algorithm still skips the lower-priority ones rather than backtracking to fill the gap.
+
+This tradeoff is reasonable for a pet care app because the task lists are small (typically under 20 tasks per pet), the priority ordering reflects genuine urgency that the owner wants respected, and the cognitive overhead of explaining a backtracking optimizer to a pet owner is not worth the marginal gain. A greedy schedule that is slightly suboptimal but easy to predict is more trustworthy for everyday use than an optimal schedule that is hard to reason about.
 
 ---
 

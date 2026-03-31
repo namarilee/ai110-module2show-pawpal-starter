@@ -1,52 +1,84 @@
 from pawpal_system import Task, Pet, Owner, Scheduler
 
-# --- Set up owner ---
+# ── Setup ────────────────────────────────────────────────────────────────────
 owner = Owner("Jordan")
 
-# --- Create pets ---
 mochi = Pet(name="Mochi", species="dog", age=3)
-luna = Pet(name="Luna", species="cat", age=5, health_notes="Needs thyroid medication with food")
+luna  = Pet(name="Luna",  species="cat", age=5)
 
-# --- Add tasks to Mochi ---
-mochi.add_task(Task("Morning walk", duration_minutes=30, priority="high", frequency="daily"))
-mochi.add_task(Task("Breakfast feeding", duration_minutes=10, priority="high", frequency="daily"))
-mochi.add_task(Task("Fetch / play session", duration_minutes=20, priority="medium", frequency="daily"))
+mochi.add_task(Task("Morning walk",      duration_minutes=30, priority="high",   frequency="daily"))
+mochi.add_task(Task("Breakfast feeding", duration_minutes=10, priority="high",   frequency="daily"))
+luna.add_task(Task("Thyroid medication", duration_minutes=5,  priority="high",   frequency="daily"))
+luna.add_task(Task("Wet food feeding",   duration_minutes=10, priority="high",   frequency="daily"))
 
-# --- Add tasks to Luna ---
-luna.add_task(Task("Thyroid medication", duration_minutes=5, priority="high", frequency="daily"))
-luna.add_task(Task("Wet food feeding", duration_minutes=10, priority="high", frequency="daily"))
-luna.add_task(Task("Brush coat", duration_minutes=15, priority="low", frequency="weekly"))
-
-# --- Register pets with owner ---
 owner.add_pet(mochi)
 owner.add_pet(luna)
 
-# --- Build today's schedule (2-hour budget, starting at 8 AM) ---
+
+def section(title: str) -> None:
+    print(f"\n{'─' * 60}")
+    print(f"  {title}")
+    print(f"{'─' * 60}")
+
+
+# ── Scenario 1: no conflicts (normal build) ──────────────────────────────────
+section("SCENARIO 1 — Normal build (no conflicts expected)")
 scheduler = Scheduler(owner, available_minutes=120, start_hour=8)
 scheduler.build()
-
-# --- Print results ---
-print("=" * 50)
-print("       PAWPAL+ — TODAY'S SCHEDULE")
-print("=" * 50)
-print(f"Owner : {owner.name}")
-print(f"Pets  : {', '.join(p.name for p in owner.pets)}")
-print(f"Budget: {scheduler.available_minutes} minutes starting at {scheduler.start_hour}:00 AM")
-print()
-
 for entry in scheduler.schedule:
-    task = entry["task"]
-    print(f"  {entry['start_time']:>8}  [{entry['pet'].name}]  {task.description}")
-    print(f"            {task.duration_minutes} min  |  priority: {task.priority}  |  {task.frequency}")
-    print(f"            {entry['reason']}")
-    print()
+    t = entry["task"]
+    print(f"  {entry['start_time']:>8}  [{entry['pet'].name}] {t.description:<22} "
+          f"{t.duration_minutes} min  [{entry['start_min']}–{entry['end_min']}]")
 
-skipped = scheduler.skipped_tasks()
-if skipped:
-    print("-" * 50)
-    print("  Could not fit into today's schedule:")
-    for pet, task in skipped:
-        print(f"    - [{pet.name}] {task.description} ({task.duration_minutes} min, {task.priority})")
-    print()
+conflicts = scheduler.detect_conflicts()
+if conflicts:
+    for w in conflicts:
+        print(f"\n  {w}")
+else:
+    print("\n  No conflicts detected.")
 
-print("=" * 50)
+# ── Scenario 2: manually inject overlapping entries to trigger warnings ───────
+section("SCENARIO 2 — Injected overlaps (same-pet + cross-pet conflicts)")
+
+# Build a fresh scheduler and manually insert overlapping windows
+s2 = Scheduler(owner, available_minutes=120, start_hour=8)
+
+# Same-pet conflict: Mochi has two tasks both starting at 8:00 (480–510 and 480–490)
+s2.schedule = [
+    {
+        "pet": mochi, "task": mochi.tasks[0],   # Morning walk 30 min
+        "start_time": "8:00 AM", "reason": "injected",
+        "start_min": 480, "end_min": 510,
+    },
+    {
+        "pet": mochi, "task": mochi.tasks[1],   # Breakfast feeding 10 min — overlaps walk
+        "start_time": "8:00 AM", "reason": "injected",
+        "start_min": 480, "end_min": 490,
+    },
+    {
+        "pet": luna, "task": luna.tasks[0],     # Thyroid medication 5 min — overlaps walk
+        "start_time": "8:05 AM", "reason": "injected",
+        "start_min": 485, "end_min": 490,
+    },
+    {
+        "pet": luna, "task": luna.tasks[1],     # Wet food feeding — no overlap
+        "start_time": "8:35 AM", "reason": "injected",
+        "start_min": 515, "end_min": 525,
+    },
+]
+
+for entry in s2.schedule:
+    t = entry["task"]
+    print(f"  {entry['start_time']:>8}  [{entry['pet'].name}] {t.description:<22} "
+          f"{t.task.duration_minutes if hasattr(entry['task'], 'task') else t.duration_minutes} min  "
+          f"[{entry['start_min']}–{entry['end_min']}]")
+
+print()
+conflicts2 = s2.detect_conflicts()
+if conflicts2:
+    for w in conflicts2:
+        print(f"  {w}")
+else:
+    print("  No conflicts detected.")
+
+print(f"\n{'─' * 60}\n")

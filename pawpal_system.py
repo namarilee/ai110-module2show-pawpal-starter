@@ -1,3 +1,7 @@
+import datetime
+import itertools
+
+
 class Task:
     """Represents a single pet care activity."""
 
@@ -23,13 +27,28 @@ class Task:
         self.priority = priority                # "low", "medium", or "high"
         self.frequency = frequency              # "daily", "weekly", or "as_needed"
         self.completed = False                  # toggled when the task is marked done
+        self.next_due: datetime.date = datetime.date.today()  # date this task is next due
 
     def mark_complete(self) -> None:
-        """Mark this task as completed for the current period."""
+        """Mark this task complete and automatically schedule the next occurrence.
+
+        - daily tasks become due again tomorrow
+        - weekly tasks become due again in 7 days
+        - as_needed tasks stay completed (no automatic recurrence)
+        """
         self.completed = True
+        if self.frequency == "daily":
+            self.next_due = datetime.date.today() + datetime.timedelta(days=1)
+        elif self.frequency == "weekly":
+            self.next_due = datetime.date.today() + datetime.timedelta(weeks=1)
+        # as_needed: no next_due update — owner re-adds when relevant
+
+    def is_due_today(self) -> bool:
+        """Return True if this task is due today or overdue (next_due <= today)."""
+        return self.next_due <= datetime.date.today()
 
     def reset(self) -> None:
-        """Reset completion status (e.g. at the start of a new day)."""
+        """Reset completion status without changing next_due (used for day-rollover)."""
         self.completed = False
 
     def priority_rank(self) -> int:
@@ -39,7 +58,8 @@ class Task:
 
     def __repr__(self) -> str:
         status = "done" if self.completed else "pending"
-        return f"{self.description} ({self.duration_minutes} min, {self.priority}, {self.frequency}, {status})"
+        return (f"{self.description} ({self.duration_minutes} min, {self.priority}, "
+                f"{self.frequency}, {status}, due {self.next_due})")
 
 
 class Pet:
@@ -122,7 +142,8 @@ class Scheduler:
         self.available_minutes = available_minutes  # total time budget for the day
         self.start_hour = start_hour                # starting hour (24h clock), default 9 AM
         self.schedule: list[dict] = []              # populated by build()
-        # each entry: {"pet": Pet, "task": Task, "start_time": str, "reason": str}
+        # each entry: {"pet": Pet, "task": Task, "start_time": str, "reason": str,
+        #              "start_min": int, "end_min": int}
 
     def build(self) -> list[dict]:
         """Build a prioritized daily schedule across all pets within the time budget.
@@ -144,16 +165,49 @@ class Scheduler:
             if minutes_used + task.duration_minutes > self.available_minutes:
                 continue  # skip tasks that don't fit; keep trying smaller ones
             total_minutes = self.start_hour * 60 + minutes_used
-            hour, minute = divmod(total_minutes, 60)
-            period = "AM" if hour < 12 else "PM"
-            display_hour = hour if hour <= 12 else hour - 12
-            display_hour = display_hour or 12
-            start_time = f"{display_hour}:{minute:02d} {period}"
+            start_time = self._format_time(total_minutes)
             reason = f"Priority: {task.priority} — fits within remaining time ({self.available_minutes - minutes_used} min left)"
-            self.schedule.append({"pet": pet, "task": task, "start_time": start_time, "reason": reason})
+            self.schedule.append({
+                "pet": pet,
+                "task": task,
+                "start_time": start_time,
+                "reason": reason,
+                "start_min": total_minutes,
+                "end_min": total_minutes + task.duration_minutes,
+            })
             minutes_used += task.duration_minutes
 
         return self.schedule
+
+    def _format_time(self, total_minutes: int) -> str:
+        """Convert an absolute minute offset into a 12-hour clock string (e.g. '9:05 AM')."""
+        hour, minute = divmod(total_minutes, 60)
+        period = "AM" if hour < 12 else "PM"
+        display_hour = hour % 12 or 12
+        return f"{display_hour}:{minute:02d} {period}"
+
+    def detect_conflicts(self) -> list[str]:
+        """Return a list of warning strings for any overlapping task windows.
+
+        Two tasks conflict when their time windows overlap:
+            A.start_min < B.end_min  and  B.start_min < A.end_min
+
+        Covers both same-pet conflicts (one owner can't do two things at once)
+        and cross-pet conflicts (e.g. walking Mochi while medicating Luna).
+        Returns an empty list when no conflicts are found.
+        Call build() first.
+        """
+        warnings = []
+        for a, b in itertools.combinations(self.schedule, 2):
+            if a["start_min"] < b["end_min"] and b["start_min"] < a["end_min"]:
+                conflict_type = "same-pet conflict" if a["pet"].name == b["pet"].name else "cross-pet conflict"
+                warnings.append(
+                    f"⚠ {conflict_type.upper()}: "
+                    f"[{a['pet'].name}] '{a['task'].description}' ({a['start_time']}, {a['task'].duration_minutes} min) "
+                    f"overlaps with "
+                    f"[{b['pet'].name}] '{b['task'].description}' ({b['start_time']}, {b['task'].duration_minutes} min)"
+                )
+        return warnings
 
     def format_schedule(self) -> str:
         """Return a markdown string of the built schedule, suitable for st.markdown().
@@ -191,6 +245,63 @@ class Scheduler:
                 task.mark_complete()
                 return True
         return False
+
+    def due_today(self) -> list[tuple[Pet, Task]]:
+        """Return all (pet, task) pairs that are due today and not yet completed."""
+        return [
+            (pet, task)
+            for pet, task in self.owner.all_tasks()
+            if task.is_due_today() and not task.completed
+        ]
+
+    def filter_tasks(
+        self,
+        pet_name: str | None = None,
+        status: str | None = None,
+        frequency: str | None = None,
+        priority: str | None = None,
+    ) -> list[tuple[Pet, Task]]:
+        """Return (pet, task) pairs filtered by any combination of:
+        - pet_name:  exact pet name string
+        - status:    "pending" or "completed"
+        - frequency: "daily", "weekly", or "as_needed"
+        - priority:  "low", "medium", or "high"
+        """
+        results = self.owner.all_tasks()
+        if pet_name is not None:
+            results = [(p, t) for p, t in results if p.name == pet_name]
+        if status == "pending":
+            results = [(p, t) for p, t in results if not t.completed]
+        elif status == "completed":
+            results = [(p, t) for p, t in results if t.completed]
+        if frequency is not None:
+            results = [(p, t) for p, t in results if t.frequency == frequency]
+        if priority is not None:
+            results = [(p, t) for p, t in results if t.priority == priority]
+        return results
+
+    def sort_tasks(
+        self,
+        tasks: list[tuple[Pet, Task]],
+        by: str = "priority",
+    ) -> list[tuple[Pet, Task]]:
+        """Sort a (pet, task) list by one of:
+        - "priority":  high → medium → low, shortest duration breaks ties
+        - "duration":  shortest first
+        - "frequency": daily → weekly → as_needed
+        - "status":    pending first, completed last
+        """
+        frequency_rank = {"daily": 0, "weekly": 1, "as_needed": 2}
+        if by == "priority":
+            return sorted(tasks, key=lambda pt: (-pt[1].priority_rank(), pt[1].duration_minutes))
+        elif by == "duration":
+            return sorted(tasks, key=lambda pt: pt[1].duration_minutes)
+        elif by == "frequency":
+            return sorted(tasks, key=lambda pt: frequency_rank[pt[1].frequency])
+        elif by == "status":
+            return sorted(tasks, key=lambda pt: pt[1].completed)  # False (pending) sorts before True
+        else:
+            raise ValueError(f"Unknown sort key {by!r}. Choose: priority, duration, frequency, status")
 
     def reset_all_tasks(self) -> None:
         """Reset completion status on every task across all pets (call at day rollover)."""
