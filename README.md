@@ -22,6 +22,26 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Features
+
+- **Priority-based greedy scheduling** — `Scheduler.build()` sorts all pending tasks by priority (high → medium → low), breaks ties by shortest duration, then greedily assigns tasks to time slots until the daily time budget is exhausted. Produces a guaranteed-valid schedule in O(n log n) time.
+
+- **Daily and weekly recurrence** — Each task carries a `frequency` (`daily`, `weekly`, `as_needed`) and a `next_due` date. `mark_complete()` automatically advances `next_due` by 1 day for daily tasks and 7 days for weekly tasks. `is_due_today()` lets the scheduler include only tasks that are currently due, so a weekly grooming session only appears on the right day.
+
+- **Sorting by priority, duration, frequency, or status** — `Scheduler.sort_tasks()` reorders any task list by four keys: priority rank (high first), duration (shortest first), frequency (daily before weekly before as-needed), or completion status (pending before done).
+
+- **Filtering by pet, status, frequency, and priority** — `Scheduler.filter_tasks()` accepts any combination of `pet_name`, `status`, `frequency`, and `priority` to return a focused subset of tasks across all pets. Filters can be combined freely.
+
+- **Conflict detection with interval overlap** — `Scheduler.detect_conflicts()` checks every pair of scheduled entries using the standard interval overlap test (`A.start < B.end and B.start < A.end`). Returns plain-English warning strings for same-pet conflicts (two tasks for one pet at the same time) and cross-pet conflicts (tasks across different pets that overlap). Never crashes — always returns a list.
+
+- **Skipped task reporting** — Tasks that don't fit within the time budget are collected by `skipped_tasks()` and surfaced separately in the UI so the owner knows what was left out and why.
+
+- **Pre-schedule overflow warning** — Before building, the app compares total task time against the available budget and warns the owner if tasks will need to be dropped, so there are no surprises after generating the schedule.
+
+- **Multi-pet support** — The `Owner` class manages any number of pets. The scheduler operates across all of them, interleaving tasks from different pets in priority order within a single daily plan.
+
+---
+
 ## Smarter Scheduling
 
 Beyond the basic daily plan, PawPal+ includes several logic improvements that make the scheduler more useful for real pet care routines.
@@ -77,6 +97,9 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+## 📸 Demo
+<a href="/course_images/ai110/app_screenshot.png" target="_blank"><img src='/course_images/ai110/app_screenshot.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
 ### Suggested workflow
 

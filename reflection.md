@@ -57,13 +57,13 @@ This tradeoff is reasonable for a pet care app because the task lists are small 
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+During design, it helped brainstorm the object model, identifying which responsibilities belonged in `Task` vs. `Pet` vs. `Scheduler`, and arguing against adding an `Owner` class before deciding one was actually needed for multi-pet support. During implementation, it generated method stubs and then filled in logic incrementally, which made it easy to read and verify each piece before moving on. During refactoring, it flagged the manual `for i / for j` double-loop in `detect_conflicts()` as a readability issue and suggested replacing it with `itertools.combinations`.
+
+The most helpful type of prompt was a constrained, specific question: "given this method signature and this docstring, implement the body" produced tighter, more reviewable code than open-ended "build a scheduler" prompts. Asking AI to explain a tradeoff — rather than just make a choice — also produced more useful output because it surfaced the reasoning, not just the answer.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+When AI first proposed the conflict detection method, it used a `for i / for j in range(len(...))` pattern with index arithmetic. The logic was correct but hard to read at a glance. Rather than accepting it, the approach was tested manually against known overlapping and non-overlapping pairs, then the implementation was simplified to `itertools.combinations`, which expresses the same intent in one line with no index math. The key verification step was running the full test suite after the refactor to confirm the behavior was identical before and after the change.
 
 ---
 
@@ -71,13 +71,16 @@ This tradeoff is reasonable for a pet care app because the task lists are small 
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+Thirteen automated tests cover four categories:
+
+- **Core behavior** — `mark_complete()` flips `completed` to `True`; adding a task increases the pet's task count. These matter because they are the most fundamental operations; if they break, nothing else works.
+- **Sorting** — priority sort returns high → medium → low; duration sort returns shortest first; the built schedule's `start_min` values are non-decreasing (chronological order). Sorting is the first step inside `build()`, so errors here would silently corrupt every schedule.
+- **Recurrence** — daily tasks advance `next_due` by exactly 1 day; weekly by exactly 7; `as_needed` tasks leave `next_due` unchanged; a completed daily task returns `False` from `is_due_today()`. Date math is easy to get wrong by one day, and a recurrence bug would mean tasks appear on the wrong day indefinitely.
+- **Conflict detection** — normal schedules produce no conflicts; same-pet and cross-pet overlaps are each flagged with the correct label; adjacent tasks that share only an endpoint are not flagged. The adjacent-task test specifically guards the `<` vs `<=` boundary in the overlap formula.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+★★★★☆ (4/5). The core scheduling logic, recurrence math, and conflict detection are all covered and passing. Two gaps remain: the Streamlit UI flow is not integration-tested (adding a task through the UI and generating a schedule is only verified manually), and the exact-fit boundary — a task whose duration equals the remaining budget to the minute — is not in the automated suite. Both work in manual testing but are not yet locked down with assertions.
 
 ---
 
@@ -85,12 +88,13 @@ This tradeoff is reasonable for a pet care app because the task lists are small 
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The layered design worked well. Because `Task`, `Pet`, `Owner`, and `Scheduler` each had a single clear responsibility, it was straightforward to add features like recurrence, filtering, conflict detection without rewriting existing methods. The greedy scheduler in particular stayed simple throughout: every new feature plugged into it rather than requiring changes to `build()` itself. The test suite also paid off immediately; when `_format_time()` was extracted from `build()` as a refactor, the tests caught no regressions and confirmed the change was safe in seconds.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+The biggest redesign would be persisting state between sessions. Right now, closing the browser tab loses every pet, task, and schedule. Adding a simple JSON file or SQLite database behind `Owner` and `Pet` would make the app genuinely useful day-to-day rather than a single-session demo. A secondary improvement would be replacing the flat task list with a proper calendar model so the scheduler can reason about specific days rather than just "today."
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The most important thing learned was that designing the data model carefully at the start saves far more time than it costs. The decision to give `Task` a `next_due` date and `frequency` field from the beginning meant that recurrence, the due-today filter, and the conflict detector all had a clean, stable foundation to build on. When those features were added later, they required new methods but no changes to existing attributes which kept the tests green throughout.
+
