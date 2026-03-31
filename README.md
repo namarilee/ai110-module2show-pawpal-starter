@@ -40,6 +40,34 @@ The core `build()` algorithm sorts tasks by priority rank (high → medium → l
 
 ---
 
+## Testing PawPal+
+
+### Running the tests
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/test_pawpal.py -v
+```
+
+### What the tests cover
+
+| Category | Tests | What is verified |
+|---|---|---|
+| **Core behavior** | 2 | `mark_complete()` flips `completed` to `True`; adding a task increases the pet's task count |
+| **Sorting** | 3 | Priority sort returns high → medium → low; duration sort returns shortest first; built schedule entries are in chronological order |
+| **Recurrence** | 4 | Daily tasks advance `next_due` by 1 day; weekly tasks advance by 7 days; `as_needed` tasks leave `next_due` unchanged; a completed daily task is no longer due today |
+| **Conflict detection** | 4 | A normal schedule has no conflicts; same-pet overlaps are flagged; cross-pet overlaps are flagged; adjacent tasks (touching but not overlapping) are not flagged |
+
+**Total: 13 tests, all passing.**
+
+### Confidence level
+
+★★★★☆ (4/5)
+
+The core scheduling logic, recurrence math, and conflict detection are all covered and passing. The main gaps are integration tests (the full UI flow through Streamlit is untested) and edge cases around the time budget boundary (e.g., a task that exactly equals the remaining minutes). Those scenarios work in manual testing but are not yet in the automated suite.
+
+---
+
 ## Getting started
 
 ### Setup
